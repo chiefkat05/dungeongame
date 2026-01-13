@@ -23,13 +23,18 @@ typedef int64_t i64;
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
+#define ABS(a) (((a) < 0) ? (-a) : (a))
+
 #define random(min, height) (rand() % ((height) - (min)) + min)
 #define PI 3.1415926535f
 
 #define DONT_CARE -1
 
-#define WINDOW_WIDTH 1600
-#define WINDOW_HEIGHT 900
+#define WINDOW_WIDTH 1280
+#define WINDOW_HEIGHT 720
+
+/* remove */
+#include <math.h>
 
 /* less "precise" but works better for pixel updates */
 static float lerp(float x, float y, float a)

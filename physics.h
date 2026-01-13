@@ -32,6 +32,31 @@ static void objMove(Obj2D *obj, float x_vel, float y_vel)
     obj->x_vel = x_vel;
     obj->y_vel = y_vel;
 }
+static float vectorLength(float x, float y)
+{
+    return sqrt(x * x + y * y);
+}
+static void vectorNormalized(float x, float y, float *out_x, float *out_y)
+{
+    float length = vectorLength(x, y);
+    *out_x = x / length;
+    *out_y = y / length;
+}
+static void objMoveTarget(Obj2D *obj, float x_target, float y_target, float speed)
+{
+    float x_dist = x_target - obj->x_pos;
+    float y_dist = y_target - obj->y_pos;
+
+    float length = vectorLength(x_dist, y_dist);
+    if (length == 0.0f)
+    { return; }
+
+    float x_dir = x_dist / length;
+    float y_dir = y_dist / length;
+
+    obj->x_vel = speed * x_dir;
+    obj->y_vel = speed * y_dir;
+}
 static void objMoveX(Obj2D *obj, float x_vel)
 {
     obj->x_vel = x_vel;

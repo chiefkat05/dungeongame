@@ -14,30 +14,25 @@ typedef struct
     u32 pixel_count;
 } image;
 
-/* There can only be one */
-static image screenBuffer;
-
 #define BYTES_PER_PIXEL 4
 
 static void imageSetPixel(image *a, int xpos, int ypos, u32 pixel)
 {
-    if (xpos < 0 || ypos < 0 || xpos >= a->width || ypos >= a->height)
+    if (xpos < 0 || ypos < 0 || xpos >= a->width || ypos >= a->height || (pixel >> 24) == 0)
     { return; }
 
     u32 *pixel_location = (u32 *)(a->data + (ypos * a->row) + xpos * BYTES_PER_PIXEL);
-    *pixel_location = pixel;
-}
-static void imageFillRandom(image *a)
-{
-    u32 *dataCursor = (u32 *)a->data;
-    int x, y;
-    for (y = 0; y < a->height; ++y)
-    {
-        for (x = 0; x < a->width; ++x)
-        {
-            *dataCursor++ = rand() % INT32_MAX;
-        }
-    }
+
+    u32 destpixel = *pixel_location;
+
+    u8 alpha = pixel >> 24;
+    u8 invalpha = 255 - alpha;
+
+    u8 red8 = _ilerpd_base((u8)(pixel >> 16 & 255), (u8)(destpixel >> 16 & 255), invalpha, u8);
+    u8 green8 = _ilerpd_base((u8)(pixel >> 8 & 255), (u8)(destpixel >> 8 & 255), invalpha, u8);
+    u8 blue8 = _ilerpd_base((u8)(pixel & 255), (u8)(destpixel & 255), invalpha, u8);
+
+    *pixel_location = 255 << 24 | red8 << 16 | green8 << 8 | blue8;
 }
 static void imageFillBlack(image *a)
 {
@@ -45,7 +40,7 @@ static void imageFillBlack(image *a)
     int p;
     for (p = 0; p < a->pixel_count; ++p)
     {
-        *dataCursor++ = 0;
+        *dataCursor++ = 255 << 24;
     }
 }
 static void imageFillWhite(image *a)
@@ -55,18 +50,6 @@ static void imageFillWhite(image *a)
     for (p = 0; p < a->pixel_count; ++p)
     {
         *dataCursor++ = 255 << 24 | 255 << 16 | 255 << 8 | 255;
-    }
-}
-static void imageFillGradient(image *a)
-{
-    u32 *dataCursor = (u32 *)a->data;
-    int x, y;
-    for (y = 0; y < a->height; ++y)
-    {
-        for (x = 0; x < a->width; ++x)
-        {
-            *dataCursor++ = x << 8 | y;
-        }
     }
 }
 static void imageFill(image *a, u32 color)
@@ -95,7 +78,7 @@ static image makeImage(Arena *arena, u32 width, u32 height)
 /* Could also likely use optimization, as it's very brute-force at the moment. */
 
 #define SPRITE_EDGE 16
-#define SPRITE_COPY_TO_IMAGE(src, dest, dx, dy, sx, sy, sw, sh) imageCopyToImage(src, dest, dx * SPRITE_EDGE, dy * SPRITE_EDGE, sx * SPRITE_EDGE, sy * SPRITE_EDGE, sw * SPRITE_EDGE, sh * SPRITE_EDGE)
+#define SPRITE_COPY_TO_IMAGE(src, dest, dx, dy, sx, sy, sw, sh) imageCopyToImage(src, dest, dx, dy, sx * SPRITE_EDGE, sy * SPRITE_EDGE, sw * SPRITE_EDGE, sh * SPRITE_EDGE)
 static void imageCopyToImage(image *src, image *dest, int dest_x_pos, int dest_y_pos, int src_x, int src_y, int src_width, int src_height)
 {
     /* defaults */
@@ -166,7 +149,7 @@ static void imageCopyToImage(image *src, image *dest, int dest_x_pos, int dest_y
     int dy;
     for (dy = draw_offset_y; dy < draw_offset_y + draw_height; ++dy)
     {
-        copyMemory32(destData, srcData, draw_width);
+        copyPixel(destData, srcData, draw_width);
         destData += dest->width;
         srcData += src->width;
     }
@@ -174,7 +157,10 @@ static void imageCopyToImage(image *src, image *dest, int dest_x_pos, int dest_y
 static void imageToImage(image *src, image *dest)
 {
     if (src->width != dest->width || src->height != dest->height)
-    { return; }
+    {
+        printf("invalid bounds on imageToImage call\n");
+        exit(1);
+    }
 
     u32 *srcData = (u32 *)src->data;
     u32 *destData = (u32 *)dest->data;
@@ -182,48 +168,8 @@ static void imageToImage(image *src, image *dest)
     int dy;
     for (dy = 0; dy < dest->height; ++dy)
     {
-        copyMemory32(destData, srcData, dest->width);
+        copyPixel(destData, srcData, dest->width);
         destData += dest->width;
-        srcData += src->width;
-    }
-}
-
-static void imageFlipVertical(image *src, image *dst)
-{
-    if (src->width != dst->width || src->height != dst->height)
-    {
-        printf("can't flip image onto image of difference size\n");
-        return;
-    }
-
-    u32 *dstData = dst->data + dst->pixel_count * BYTES_PER_PIXEL;
-    dstData -= src->width;
-    u32 *srcData = src->data;
-
-    int dy;
-    for (dy = 0; dy < src->height; ++dy)
-    {
-        copyMemory32(dstData, srcData, src->width);
-        dstData -= src->width;
-        srcData += src->width;
-    }
-}
-static void imageFlipHorizontal(image *src, image *dst)
-{
-    if (src->width != dst->width || src->height != dst->height)
-    {
-        printf("can't flip image onto image of difference size\n");
-        return;
-    }
-
-    u32 *dstData = dst->data;
-    u32 *srcData = src->data;
-
-    int dy;
-    for (dy = 0; dy < src->height; ++dy)
-    {
-        copyMemoryReverse32(dstData, srcData, src->width);
-        dstData += src->width;
         srcData += src->width;
     }
 }
@@ -313,13 +259,110 @@ void imageScaleToImage(image *src, image *dst)
             srcpixel += diffY * src->width;
             currentY = pY;
 
-            *pixel++ = *srcpixel;
+            copyPixel(pixel, srcpixel, 1);
+            ++pixel;
         }
     }
 }
 
 /* special effects */
 
+static void imageColorMulti(image *src, float red_multi, float green_multi, float blue_multi)
+{
+    u32 *srcData = src->data;
+
+    int p;
+    for (p = 0; p < src->pixel_count; ++p)
+    {
+        u8 old_red = ((*srcData) >> 16) & 255;
+        u8 old_green = ((*srcData) >> 8) & 255;
+        u8 old_blue = (*srcData) & 255;
+        
+        float redf = (float)old_red * red_multi;
+        float greenf = (float)old_green * green_multi;
+        float bluef = (float)old_blue * blue_multi;
+
+        u8 new_red = (u8)redf;
+        u8 new_green = (u8)greenf;
+        u8 new_blue = (u8)bluef;
+
+        srcData++;
+    }
+}
+
+static void imageFlipVertical(image *src, image *dst)
+{
+    if (src->width != dst->width || src->height != dst->height)
+    {
+        printf("can't flip image onto image of difference size\n");
+        return;
+    }
+
+    u32 *dstData = dst->data + dst->pixel_count * BYTES_PER_PIXEL;
+    dstData -= src->width;
+    u32 *srcData = src->data;
+
+    int dy;
+    for (dy = 0; dy < src->height; ++dy)
+    {
+        copyPixel(dstData, srcData, src->width);
+        dstData -= src->width;
+        srcData += src->width;
+    }
+}
+static void imageFlipHorizontal(image *src, image *dst)
+{
+    if (src->width != dst->width || src->height != dst->height)
+    {
+        printf("can't flip image onto image of difference size\n");
+        return;
+    }
+
+    u32 *dstData = dst->data;
+    u32 *srcData = src->data;
+
+    int dy;
+    for (dy = 0; dy < src->height; ++dy)
+    {
+        copyPixelReverse(dstData, srcData, src->width);
+        dstData += src->width;
+        srcData += src->width;
+    }
+}
+static void imageFillVignette(image *src, float strength)
+{
+    u32 *dataCursor = (u32 *)src->data;
+    int falloffx = 255;
+    int falloffy = 255;
+    int x, y;
+    for (y = 0; y < src->height; ++y)
+    {
+        for (x = 0; x < src->width; ++x)
+        {
+            falloffx = 255 - x / strength;
+            if (x > src->width / 2)
+            {
+                falloffx = 255 - (src->width - x) / strength;
+            }
+            falloffy = 255 - y / strength;
+            if (y > src->height / 2)
+            {
+                falloffy = 255 - (src->height - y) / strength;
+            }
+
+            falloffx = MIN(falloffx, 255);
+            falloffy = MIN(falloffy, 255);
+            falloffx = MAX(falloffx, 0);
+            falloffy = MAX(falloffy, 0);
+
+            int falloff = falloffx + falloffy;
+            falloff = MIN(falloff, 255);
+            falloff = MAX(falloff, 0);
+
+            *dataCursor++ = (u8)falloff << 24;
+        }
+    }
+}
 // screen shake
 
 // heat wave effect

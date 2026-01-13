@@ -61,6 +61,66 @@ static void copyMemoryReverse32(u32 *dest, u32 *src, u64 count)
     { ((u32 *)dest)[count - (i + 1)] = ((u32 *)src)[i]; }
 }
 
+// static void copyPixel(u32 *dest, u32 *src, u64 count)
+// {
+//     u32 i;
+//     for (i = 0; i < count; ++i)
+//     {
+//         if (((((u32 *)src)[i] >> 24) & 255) == 0)
+//         { continue; }
+
+//         u32 destpixel = ((u32 *)dest)[i];
+//         u32 pixel = ((u32 *)src)[i];
+
+//         float alpha = (float)(pixel >> 24) / 255.0f;
+//         float new_red = ((float)(pixel >> 16 & 255) * alpha) + ((float)(destpixel >> 16 & 255) * (1.0 - alpha));
+//         float new_green = ((float)(pixel >> 8 & 255) * alpha) + ((float)(destpixel >> 8 & 255) * (1.0 - alpha));
+//         float new_blue = ((float)(pixel & 255) * alpha) + ((float)(destpixel & 255) * (1.0 - alpha));
+//         u8 red8 = (u8)new_red;
+//         u8 green8 = (u8)new_green;
+//         u8 blue8 = (u8)new_blue;
+
+//         ((u32 *)dest)[i] = 255 << 24 | red8 << 16 | green8 << 8 | blue8;
+//     }
+// }
+/* special thanks to https://github.com/MaikSteiger/ilerp/blob/master/ilerp.h */
+#define _ilerps_base(src, dest, delta, type) (type)((src * (((1LL << ((sizeof(type) * 8) - 1))) - delta) + dest * delta) >> 7)
+#define _ilerpd_base(src, dest, delta, type) (type)((src * (((type) (((1LL << ((sizeof(type) * 8) - 1)) * 2) - 1)) - delta) + dest * delta) / 255)
+static void copyPixel(u32 *dest, u32 *src, u64 count)
+{
+    u32 i;
+    for (i = 0; i < count; ++i)
+    {
+        if (((((u32 *)src)[i] >> 24) & 255) == 0)
+        { continue; }
+        // if (((((u32 *)src)[i] >> 24) & 255) == 255)
+        // { ((u8 *)dest)[i] = ((u8 *)src)[i]; }
+
+        u32 destpixel = ((u32 *)dest)[i];
+        u32 pixel = ((u32 *)src)[i];
+
+        u8 alpha = pixel >> 24;
+        u8 invalpha = 255 - alpha;
+
+        u8 red8 = _ilerpd_base((u8)(pixel >> 16 & 255), (u8)(destpixel >> 16 & 255), invalpha, u8);
+        u8 green8 = _ilerpd_base((u8)(pixel >> 8 & 255), (u8)(destpixel >> 8 & 255), invalpha, u8);
+        u8 blue8 = _ilerpd_base((u8)(pixel & 255), (u8)(destpixel & 255), invalpha, u8);
+
+        ((u32 *)dest)[i] = 255 << 24 | red8 << 16 | green8 << 8 | blue8;
+    }
+}
+static void copyPixelReverse(u32 *dest, u32 *src, u64 count)
+{
+    u32 i;
+    for (i = 0; i < count; ++i)
+    {
+        if (((((u32 *)src)[i] >> 24) & 255) == 0)
+        { continue; }
+        
+        ((u32 *)dest)[count - (i + 1)] = ((u32 *)src)[i];
+    }
+}
+
 static const char *readFile(Arena *arena, const char *path)
 {
     FILE *f = fopen(path, "rb");

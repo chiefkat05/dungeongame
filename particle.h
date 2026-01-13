@@ -14,28 +14,42 @@ typedef enum
     PARTICLESYSTEM_BOIDS
 } ParticleSystemType;
 
-#define MAX_PARTICLE_COUNT 4096
+#define MAX_PARTICLE_COUNT 1024
+typedef struct
+{
+    float last_x_pos;
+    float last_y_pos;
+    float x_pos;
+    float y_pos;
+    float last_x_vel;
+    float last_y_vel;
+    float x_vel;
+    float y_vel;
+    float x_vel_push;
+    float y_vel_push;
+} ParticleBody;
+typedef struct
+{
+    float red_pos;
+    float green_pos;
+    float blue_pos;
+    float alpha_pos;
+    u32 pixel_color;
+} ParticleColor;
+typedef struct
+{
+    bool alive;
+    float life_time;
+    bool life_limited;
+} ParticleLife;
 typedef struct
 {
     ParticleSystemType type;
-    float last_x_pos[MAX_PARTICLE_COUNT];
-    float last_y_pos[MAX_PARTICLE_COUNT];
-    float x_pos[MAX_PARTICLE_COUNT];
-    float y_pos[MAX_PARTICLE_COUNT];
-    float last_x_vel[MAX_PARTICLE_COUNT];
-    float last_y_vel[MAX_PARTICLE_COUNT];
-    float x_vel[MAX_PARTICLE_COUNT];
-    float y_vel[MAX_PARTICLE_COUNT];
-    float x_vel_push[MAX_PARTICLE_COUNT];
-    float y_vel_push[MAX_PARTICLE_COUNT];
 
-    u8 red[MAX_PARTICLE_COUNT];
-    u8 green[MAX_PARTICLE_COUNT];
-    u8 blue[MAX_PARTICLE_COUNT];
-
-    bool alive[MAX_PARTICLE_COUNT];
-    float life_time[MAX_PARTICLE_COUNT];
-    bool life_limited[MAX_PARTICLE_COUNT];
+    ParticleBody bodies[MAX_PARTICLE_COUNT];
+    ParticleColor colors[MAX_PARTICLE_COUNT];
+    ParticleLife lives[MAX_PARTICLE_COUNT];
+    image *images[MAX_PARTICLE_COUNT];
 
     u32 particle_limit;
     u32 current_editing_particle;
@@ -50,7 +64,7 @@ static bool particleSystemAdd(ParticleSystem *system, float xpos, float ypos)
     int i;
     for (i = 0; i < system->particle_limit; ++i)
     {
-        if (!system->alive[i])
+        if (!system->lives[i].alive)
         {
             particleIndex = i;
             break;
@@ -59,13 +73,14 @@ static bool particleSystemAdd(ParticleSystem *system, float xpos, float ypos)
     if (particleIndex == -1)
     { return false; }
 
-    system->x_vel[particleIndex] = 0.0f;
-    system->y_vel[particleIndex] = 0.0f;
-    system->x_vel_push[particleIndex] = 0.0f;
-    system->y_vel_push[particleIndex] = 0.0f;
-    system->x_pos[particleIndex] = xpos;
-    system->y_pos[particleIndex] = ypos;
-    system->alive[particleIndex] = true;
+    system->lives[i].alive = true;
+
+    system->bodies[particleIndex].x_vel = 0.0f;
+    system->bodies[particleIndex].y_vel = 0.0f;
+    system->bodies[particleIndex].x_vel_push = 0.0f;
+    system->bodies[particleIndex].y_vel_push = 0.0f;
+    system->bodies[particleIndex].x_pos = xpos;
+    system->bodies[particleIndex].y_pos = ypos;
 
     system->current_editing_particle = particleIndex;
 
@@ -74,28 +89,28 @@ static bool particleSystemAdd(ParticleSystem *system, float xpos, float ypos)
 
 static void particleSystemPush(ParticleSystem *system, float xpush, float ypush)
 {
-    system->x_vel_push[system->current_editing_particle] = xpush;
-    system->y_vel_push[system->current_editing_particle] = ypush;
+    system->bodies[system->current_editing_particle].x_vel_push = xpush;
+    system->bodies[system->current_editing_particle].y_vel_push = ypush;
 }
 static void particleSystemMove(ParticleSystem *system, float xvel, float yvel)
 {
-    system->x_vel[system->current_editing_particle] = xvel;
-    system->y_vel[system->current_editing_particle] = yvel;
+    system->bodies[system->current_editing_particle].x_vel = xvel;
+    system->bodies[system->current_editing_particle].y_vel = yvel;
 }
 static void particleSystemLifespan(ParticleSystem *system, float time)
 {
-    system->life_limited[system->current_editing_particle] = true;
-    system->life_time[system->current_editing_particle] = time;
+    system->lives[system->current_editing_particle].life_limited = true;
+    system->lives[system->current_editing_particle].life_time = time;
 }
-static void particleSystemColor(ParticleSystem *system, u8 red, u8 green, u8 blue)
+static void particleSystemColor(ParticleSystem *system, u8 red, u8 green, u8 blue, u8 alpha)
 {
-    system->red[system->current_editing_particle] = red;
-    system->green[system->current_editing_particle] = green;
-    system->blue[system->current_editing_particle] = blue;
+    system->colors[system->current_editing_particle].red_pos = red;
+    system->colors[system->current_editing_particle].green_pos = green;
+    system->colors[system->current_editing_particle].blue_pos = blue;
+    system->colors[system->current_editing_particle].alpha_pos = alpha;
 }
 
-/* remove */
-#include <math.h>
+/* particle generation hints functions here (so you don't have to keep changing particle effects) */
 static void particleSystemGenerate(ParticleSystem *system, int particles, float timerReset, int xmin, int xmax, int ymin, int ymax)
 {
     system->generateTimer -= PHYSICS_TICK;
@@ -119,13 +134,13 @@ static void particleSystemGenerate(ParticleSystem *system, int particles, float 
             case PARTICLESYSTEM_SNOW:
                 {
                     int shade = random(200, 255);
-                    particleSystemColor(system, shade, shade, shade);
+                    particleSystemColor(system, shade, shade, shade, 160);
                     particleSystemMove(system, (float)(random(100, 150)), -(float)(random(50, 125)));
                 } break;
             case PARTICLESYSTEM_SPACEFIELD:
                 {
                     int shade = 255;
-                    particleSystemColor(system, shade, shade, shade);
+                    particleSystemColor(system, shade, shade, shade, 255);
                     float x_speed = (float)(random(-1000, 1000));
                     float y_speed = (float)(random(-1000, 1000));
 
@@ -141,7 +156,7 @@ static void particleSystemGenerate(ParticleSystem *system, int particles, float 
                     int shade = random(150, 255);
                     int red = MIN(255, shade + 50);
                     int green = MIN(255, shade + 30);
-                    particleSystemColor(system, red, green, shade);
+                    particleSystemColor(system, red, green, shade, 255);
 
                     particleSystemMove(system, (float)(random(-100, 100)) / 10.0f, 0.0f);
                     particleSystemPush(system, 0.0f, -(float)(random(700, 800)) / 10.0f);
@@ -149,13 +164,14 @@ static void particleSystemGenerate(ParticleSystem *system, int particles, float 
             case PARTICLESYSTEM_FIRE:
                 {
                     int shade = random(20, 40);
-                    int red = MIN(255, shade + 200);
-                    int green = MIN(255, shade + 50);
-                    particleSystemColor(system, red, green, shade);
+                    int red = MIN(255, shade + 240);
+                    int green = MIN(255, shade + 200);
+                    int blue = MIN(255, shade + 100);
+                    particleSystemColor(system, red, green, blue, 255);
 
-                    particleSystemMove(system, (float)(random(-100, 100)) / 10.0f, 0.0f);
-                    particleSystemPush(system, 0.0f, (float)(random(700, 800)) / 10.0f);
-                    particleSystemLifespan(system, 1.0f);
+                    particleSystemMove(system, (float)(random(-500, 500)) / 10.0f, 0.0f);
+                    particleSystemPush(system, 0.0f, (float)(random(1000, 1200)) / 10.0f);
+                    particleSystemLifespan(system, 0.8f);
                 } break;
             default:
                 break;
@@ -168,77 +184,91 @@ static void particleSystemUpdate(ParticleSystem *system, image *buffer)
     int p;
     for (p = 0; p < MAX_PARTICLE_COUNT; ++p)
     {
-        if (!system->alive[p])
+        if (!system->lives[p].alive)
         { continue; }
 
-        system->last_x_vel[p] = system->x_vel[p];
-        system->x_vel[p] += system->x_vel_push[p] * PHYSICS_TICK;
-        system->last_y_vel[p] = system->y_vel[p];
-        system->y_vel[p] += system->y_vel_push[p] * PHYSICS_TICK;
+        system->bodies[p].last_x_vel = system->bodies[p].x_vel;
+        system->bodies[p].x_vel += system->bodies[p].x_vel_push * PHYSICS_TICK;
+        system->bodies[p].last_y_vel = system->bodies[p].y_vel;
+        system->bodies[p].y_vel += system->bodies[p].y_vel_push * PHYSICS_TICK;
 
-        system->last_x_pos[p] = system->x_pos[p];
-        system->last_y_pos[p] = system->y_pos[p];
+        system->bodies[p].last_x_pos = system->bodies[p].x_pos;
+        system->bodies[p].last_y_pos = system->bodies[p].y_pos;
 
-        system->x_pos[p] += (system->x_vel[p] + system->last_x_vel[p]) / 2.0f * PHYSICS_TICK;
-        system->y_pos[p] += (system->y_vel[p] + system->last_y_vel[p]) / 2.0f * PHYSICS_TICK;
+        system->bodies[p].x_pos += (system->bodies[p].x_vel + system->bodies[p].last_x_vel) / 2.0f * PHYSICS_TICK;
+        system->bodies[p].y_pos += (system->bodies[p].y_vel + system->bodies[p].last_y_vel) / 2.0f * PHYSICS_TICK;
 
-        if (system->life_limited[p])
+        if (system->lives[p].life_limited)
         {
-            system->life_time[p] -= PHYSICS_TICK;
+            system->lives[p].life_time -= PHYSICS_TICK;
 
-            if (system->life_time[p] <= 0.0f)
+            if (system->lives[p].life_time <= 0.0f)
             {
-                system->alive[p] = false;
+                system->lives[p].alive = false;
+                continue;
             }
         }
-
-        u32 pixel_color = system->red[p] | system->green[p] << 8 | system->blue[p] << 16 | 255 << 24;
 
         /* system-specific activities */
         switch(system->type)
         {
             case PARTICLESYSTEM_SNOW:
-                if (system->y_pos[p] < 0)
+                if (system->bodies[p].y_pos < 0)
                 {
-                    system->alive[p] = false;
+                    system->lives[p].alive = false;
                 }
-                if (system->x_pos[p] > buffer->width)
+                if (system->bodies[p].x_pos > buffer->width)
                 {
-                    system->x_pos[p] = 0;
+                    system->bodies[p].x_pos = 0;
                 }
                 break;
             case PARTICLESYSTEM_SPACEFIELD:
-                if (system->y_pos[p] < 0 || system->x_pos[p] < 0 || system->y_pos[p] > buffer->height || system->x_pos[p] > buffer->width)
+                if (system->bodies[p].y_pos < 0 || system->bodies[p].x_pos < 0 || system->bodies[p].y_pos > buffer->height || system->bodies[p].x_pos > buffer->width)
                 {
-                    system->alive[p] = false;
+                    system->lives[p].alive = false;
                 }
                 break;
             case PARTICLESYSTEM_SAND:
-                if (system->y_pos[p] < 0)
+                if (system->bodies[p].y_pos < 0)
                 {
-                    system->y_pos[p] = 0;
+                    system->bodies[p].y_pos = 0;
                     system->current_editing_particle = p;
                     particleSystemPush(system, 0.0f, 0.0f);
                 }
                 break;
+            case PARTICLESYSTEM_FIRE:
+                system->colors[p].red_pos -= 10.0f * PHYSICS_TICK;
+                system->colors[p].green_pos -= 120.0f * PHYSICS_TICK;
+                system->colors[p].blue_pos -= 240.0f * PHYSICS_TICK;
+                system->colors[p].alpha_pos -= 200.0f * PHYSICS_TICK;
             default:
                 break;
         }
     }
+
 }
 static void particleSystemDraw(ParticleSystem *system, image *buffer, float alphaTime)
 {
     int p;
     for (p = 0; p < MAX_PARTICLE_COUNT; ++p)
     {
-        if (!system->alive[p])
+        if (!system->lives[p].alive)
         { continue; }
 
-        float particleAlphaX = lerp(system->last_x_pos[p], system->x_pos[p], alphaTime);
-        float particleAlphaY = lerp(system->last_y_pos[p], system->y_pos[p], alphaTime);
-        u32 pixel_color = system->red[p] | system->green[p] << 8 | system->blue[p] << 16 | 255 << 24;
+        float particleAlphaX = lerp(system->bodies[p].last_x_pos, system->bodies[p].x_pos, alphaTime);
+        float particleAlphaY = lerp(system->bodies[p].last_y_pos, system->bodies[p].y_pos, alphaTime);
+        float red = MAX(0, MIN(255, system->colors[p].red_pos));
+        float green = MAX(0, MIN(255, system->colors[p].green_pos));
+        float blue = MAX(0, MIN(255, system->colors[p].blue_pos));
+        float alpha = MAX(0, MIN(255, system->colors[p].alpha_pos));
+        u8 red8 = (u8)red;
+        u8 green8 = (u8)green;
+        u8 blue8 = (u8)blue;
+        u8 alpha8 = (u8)alpha;
+        system->colors[p].pixel_color = red8 | green8 << 8 | blue8 << 16 | alpha8 << 24;
 
-        imageSetPixel(buffer, particleAlphaX, particleAlphaY, pixel_color);
+        if (!system->images[p])
+        { imageSetPixel(buffer, particleAlphaX, particleAlphaY, system->colors[p].pixel_color); }
     }
 }
 
