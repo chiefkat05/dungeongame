@@ -63,6 +63,14 @@
 
 #define PRESSED 1
 #define RELEASED 0
+#define UP 1
+#define UPRIGHT 3
+#define RIGHT 2
+#define DOWNRIGHT 6
+#define DOWN 4
+#define DOWNLEFT 12
+#define LEFT 8
+#define UPLEFT 9
 typedef enum
 {
     MOUSE_ID, /* ?? test with multiple mice */
@@ -75,11 +83,15 @@ typedef enum
     KEY_0, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9,
     KEY_SHIFT, KEY_CTRL, KEY_TAB, KEY_ESC, KEY_SPACE, KEY_ENTER,
 
-    GAMEPAD_ID, /* test with multiple gamepads (should be able to take two or more inputs at the same time) */
-    GAMEPAD_AXIS_0, GAMEPAD_AXIS_1, GAMEPAD_AXIS_2, GAMEPAD_AXIS_3, GAMEPAD_AXIS_4, GAMEPAD_AXIS_5,
-    GAMEPAD_AXIS_6, GAMEPAD_AXIS_7, GAMEPAD_AXIS_8, GAMEPAD_AXIS_9, GAMEPAD_AXIS_10, GAMEPAD_AXIS_11,
+    PAD_ID, /* test with multiple pads (should be able to take two or more inputs at the same time) */
+    PAD_AXIS0, PAD_AXIS1, PAD_AXIS2, PAD_AXIS3, PAD_AXIS4, PAD_AXIS5,
+    PAD_AXIS6, PAD_AXIS7, PAD_AXIS8, PAD_AXIS9, PAD_AXIS10, PAD_AXIS11,
+    PAD_HAT0, PAD_HAT1, PAD_HAT2, PAD_HAT3, PAD_HAT4, PAD_HAT5, PAD_HAT6, PAD_HAT7, PAD_HAT8,
+    PAD_BUTTONA, PAD_BUTTONB, PAD_BUTTONX, PAD_BUTTONY, PAD_BUTTONL, PAD_BUTTONR,
+    PAD_BUTTONSELECT, PAD_BUTTONSTART, PAD_BUTTONHOME, PAD_BUTTONSTICKL, PAD_BUTTONSTICKR,
+    PAD_BUTTON_DPADUP, PAD_BUTTON_DPADRIGHT, PAD_BUTTON_DPADDOWN, PAD_BUTTON_DPADLEFT,
 
-    /* remember to buy two joysticks from gamexchange so you can... test with multiple joysticks */
+    JOYSTICK_ID, /* ditto */
     JOYSTICK_UP,
 
     total_input_count
@@ -163,11 +175,8 @@ static void joystickPoll(WindowData *winData, int jid)
     {
         return;
     }
-    int axesCount;
+    int i, axesCount, hatCount, buttonCount;
     const float *axes = glfwGetJoystickAxes(jid, &axesCount);
-    const char *name = glfwGetJoystickName(jid);
-
-    int i;
     for (i = 0; i < axesCount; ++i)
     {
         float axesValue = axes[i];
@@ -175,10 +184,22 @@ static void joystickPoll(WindowData *winData, int jid)
         {
             axesValue = 0.0f;
         }
-        InputCode inputCode = GAMEPAD_AXIS_0 + i;
+        InputCode inputCode = PAD_AXIS0 + i;
         i16 inputValue = (i16)(axesValue * (float)INT16_MAX);
 
         inputSet(&winData->input[jid], inputCode, inputValue);
+    }
+
+    u8 *hats = glfwGetJoystickHats(jid, &hatCount);
+    for (i = 0; i < hatCount; ++i)
+    {
+        inputSet(&winData->input[jid], PAD_HAT0 + i, hats[i]);
+    }
+
+    u8 *buttons = glfwGetJoystickButtons(jid, &buttonCount);
+    for (i = 0; i < buttonCount; ++i)
+    {
+        inputSet(&winData->input[jid], PAD_BUTTONA + i, buttons[i]);
     }
 }
 static void keyboardCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
@@ -335,18 +356,18 @@ int main()
 
         objMove(&playerObj, 0.0f, 0.0f);
 
-        objMoveX(&playerObj, inputGet(&winData.input[0], GAMEPAD_AXIS_0) / 328);
-        objMoveY(&playerObj, -inputGet(&winData.input[0], GAMEPAD_AXIS_1) / 328);
+        objMoveX(&playerObj, inputGet(&winData.input[0], PAD_AXIS0) / 328);
+        objMoveY(&playerObj, -inputGet(&winData.input[0], PAD_AXIS1) / 328);
 
         if (glfwGetKey(window, GLFW_KEY_A)) { objMoveX(&playerObj, -100.0f); }
         if (glfwGetKey(window, GLFW_KEY_D)) { objMoveX(&playerObj,  100.0f); }
         if (glfwGetKey(window, GLFW_KEY_S)) { objMoveY(&playerObj, -100.0f); }
         if (glfwGetKey(window, GLFW_KEY_W)) { objMoveY(&playerObj,  100.0f); }
 
-        if ((inputGet(&winData.input[0], GAMEPAD_AXIS_3) || inputGet(&winData.input[0], GAMEPAD_AXIS_4)))
+        if ((inputGet(&winData.input[0], PAD_AXIS3) || inputGet(&winData.input[0], PAD_AXIS4)))
         {
-            playerShot.x_pos = playerObj.x_pos + inputGet(&winData.input[0], GAMEPAD_AXIS_3) / 800;
-            playerShot.y_pos = playerObj.y_pos - inputGet(&winData.input[0], GAMEPAD_AXIS_4) / 800;
+            playerShot.x_pos = playerObj.x_pos + inputGet(&winData.input[0], PAD_AXIS3) / 800;
+            playerShot.y_pos = playerObj.y_pos - inputGet(&winData.input[0], PAD_AXIS4) / 800;
         }
 
         objMoveTarget(&badSquareObj, playerObj.x_pos, playerObj.y_pos, 10.0f);
