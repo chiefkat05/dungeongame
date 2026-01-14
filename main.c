@@ -161,10 +161,14 @@ static void resizeOpenGL(int width, int height)
 typedef struct
 {
     InputState input[MAX_PLAYERS];
+    int win_width, win_height;
 } WindowData;
 static void framebufferSizeCallback(GLFWwindow *window, int width, int height)
 {
+    WindowData *data = (WindowData *)glfwGetWindowUserPointer(window);
     resizeOpenGL(width, height);
+    data->win_width = width;
+    data->win_height = height;
 }
 
 /** TODO: MAKE THIS CONFIGUREABLE */
@@ -190,13 +194,13 @@ static void joystickPoll(WindowData *winData, int jid)
         inputSet(&winData->input[jid], inputCode, inputValue);
     }
 
-    u8 *hats = glfwGetJoystickHats(jid, &hatCount);
+    const u8 *hats = glfwGetJoystickHats(jid, &hatCount);
     for (i = 0; i < hatCount; ++i)
     {
         inputSet(&winData->input[jid], PAD_HAT0 + i, hats[i]);
     }
 
-    u8 *buttons = glfwGetJoystickButtons(jid, &buttonCount);
+    const u8 *buttons = glfwGetJoystickButtons(jid, &buttonCount);
     for (i = 0; i < buttonCount; ++i)
     {
         inputSet(&winData->input[jid], PAD_BUTTONA + i, buttons[i]);
@@ -261,18 +265,40 @@ static void keyboardCallback(GLFWwindow *window, int key, int scancode, int acti
         default: break;
     }
 }
+static void mousePosCallback(GLFWwindow *window, double xpos, double ypos)
+{
+    WindowData *data = (WindowData *)glfwGetWindowUserPointer(window);
+
+    float screen_x, screen_y, screen_width, screen_height;
+    letterbox(data->win_width, data->win_height, SCREENWIDTH, SCREENHEIGHT, &screen_x, &screen_y, &screen_width, &screen_height);
+
+    xpos -= screen_x;
+    ypos -= screen_y;
+    xpos /= screen_width;
+    ypos /= screen_height;
+    inputSet(&data->input[0], MOUSE_X, xpos * INT16_MAX);
+    inputSet(&data->input[0], MOUSE_Y, (1.0f - ypos) * INT16_MAX);
+}
+static void mouseButtonCallback(GLFWwindow *window, int button, int action, int mods)
+{
+    WindowData *data = (WindowData *)glfwGetWindowUserPointer(window);
+
+    inputSet(&data->input[0], MOUSE_BUTTON_LEFT + button, action == GLFW_PRESS ? PRESSED : RELEASED);
+}
 
 int main()
 {
     glfwInit();
 
-    WindowData winData = {};
+    WindowData winData = {.win_width = WINDOW_WIDTH, .win_height = WINDOW_HEIGHT};
     glfwWindowHint(GLFW_POSITION_X, -400);
     glfwWindowHint(GLFW_POSITION_Y, 0);
     GLFWwindow *window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "window", 0, 0);
     glfwSetWindowUserPointer(window, &winData);
     glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
     glfwSetKeyCallback(window, keyboardCallback);
+    glfwSetMouseButtonCallback(window, mouseButtonCallback);
+    glfwSetCursorPosCallback(window, mousePosCallback);
     
     glfwMakeContextCurrent(window);
 
@@ -313,30 +339,6 @@ int main()
     }
 
     Obj2D playerObj = makeObj(0.0f, 0.0f, 16.0f, 16.0f);
-    image playerImg = makeImage(&globalMemory, playerObj.width, playerObj.height);
-    imageScaleToImage(&dogImg, &playerImg);
-
-    Obj2D badSquareObj = makeObj(0.0f, 0.0f, 16.0f, 16.0f);
-
-    Arena tempObjMemory;
-    Obj2D playerShot = makeObj(0.0f, 0.0f, 4.0f, 4.0f);
-    image alphaTestBMP = imageMakeFromBMP(&globalMemory, "alpha.bmp");
-    image playerShotImg = makeImage(&globalMemory, playerShot.width, playerShot.height);
-    imageScaleToImage(&alphaTestBMP, &playerShotImg);
-    bool playerShotActivated = false;
-
-    image vignette = makeImage(&globalMemory, SCREENWIDTH, SCREENHEIGHT);
-    imageFillVignette(&vignette, 0.2f);
-
-
-    ParticleSystem left_flame = {
-        .type = PARTICLESYSTEM_FIRE,
-        .particle_limit = MAX_PARTICLE_COUNT,
-    };
-    ParticleSystem right_flame = {
-        .type = PARTICLESYSTEM_FIRE,
-        .particle_limit = MAX_PARTICLE_COUNT,
-    };
 
     float deltaTime, currentTime, previousTime, accumulatedTime = 0.0f;
     currentTime = glfwGetTime();
@@ -353,71 +355,25 @@ int main()
 
         glClearColor(0.2, 0.2, 0.3, 1.0);
         glClear(GL_COLOR_BUFFER_BIT);
-
-        objMove(&playerObj, 0.0f, 0.0f);
-
+        
         objMoveX(&playerObj, inputGet(&winData.input[0], PAD_AXIS0) / 328);
         objMoveY(&playerObj, -inputGet(&winData.input[0], PAD_AXIS1) / 328);
-
-        if (glfwGetKey(window, GLFW_KEY_A)) { objMoveX(&playerObj, -100.0f); }
-        if (glfwGetKey(window, GLFW_KEY_D)) { objMoveX(&playerObj,  100.0f); }
-        if (glfwGetKey(window, GLFW_KEY_S)) { objMoveY(&playerObj, -100.0f); }
-        if (glfwGetKey(window, GLFW_KEY_W)) { objMoveY(&playerObj,  100.0f); }
-
-        if ((inputGet(&winData.input[0], PAD_AXIS3) || inputGet(&winData.input[0], PAD_AXIS4)))
-        {
-            playerShot.x_pos = playerObj.x_pos + inputGet(&winData.input[0], PAD_AXIS3) / 800;
-            playerShot.y_pos = playerObj.y_pos - inputGet(&winData.input[0], PAD_AXIS4) / 800;
-        }
-
-        objMoveTarget(&badSquareObj, playerObj.x_pos, playerObj.y_pos, 10.0f);
 
         while (accumulatedTime > PHYSICS_TICK)
         {
             objUpdate(&playerObj);
-            objUpdate(&badSquareObj);
-            objUpdate(&playerShot);
-            particleSystemGenerate(&left_flame, 1, 0.001f, 40, 40, 4, 4);
-            particleSystemGenerate(&right_flame, 1, 0.001f, SCREENWIDTH - 40, SCREENWIDTH - 40, 4, 4);
-            particleSystemUpdate(&left_flame, &screenBuffer);
-            particleSystemUpdate(&right_flame, &screenBuffer);
-
-            if (playerShot.x_pos < 0 || playerShot.x_pos > SCREENWIDTH || playerShot.y_pos < 0 || playerShot.y_pos > SCREENHEIGHT)
-            {
-                playerShotActivated = false;
-            }
-
             accumulatedTime -= PHYSICS_TICK;
         }
 
-        playerObj.x_pos = MIN(playerObj.x_pos, SCREENWIDTH - playerObj.width);
-        playerObj.x_pos = MAX(playerObj.x_pos, 0);
-        playerObj.y_pos = MIN(playerObj.y_pos, SCREENHEIGHT - playerObj.height);
-        playerObj.y_pos = MAX(playerObj.y_pos, 0);
-
         imageFillBlack(&screenBuffer);
-
-        SPRITE_COPY_TO_IMAGE(&tilemapImg, &screenBuffer, objGetX(&badSquareObj, accumulatedTime), objGetY(&badSquareObj, accumulatedTime), 1, 1, 1, 1);
-
-        imageScaleToImage(&dogImg, &screenBuffer);
-        imageCopyToImage(&playerImg, &screenBuffer, objGetX(&playerObj, accumulatedTime), objGetY(&playerObj, accumulatedTime), DONT_CARE, DONT_CARE, DONT_CARE, DONT_CARE);
-        imageCopyToImage(&playerShotImg, &screenBuffer, objGetX(&playerShot, accumulatedTime), objGetY(&playerShot, accumulatedTime), 0, 0, -1, -1);
-
-        imageCopyToImage(&vignette, &screenBuffer, 0, 0, -1, -1, -1, -1);
-
-        imageCopyToImage(&levelImg, &screenBuffer, 0, 0, 0, 0, DONT_CARE, DONT_CARE);
-
-        particleSystemDraw(&left_flame, &screenBuffer, accumulatedTime);
-        particleSystemDraw(&right_flame, &screenBuffer, accumulatedTime);
-
         /**
          * 
          * drive to studio apartment place and check it out/ask about pricing and availability
          * play games to study
-         * work on game
          * 
          */
 
+        imageSetRect(&screenBuffer, objGetX(&playerObj, accumulatedTime), objGetY(&playerObj, accumulatedTime), 40, 40, 255 << 24 | 255);
         imageCopyToScreen(&screenBuffer, texture);
 
         glUseProgram(shader);

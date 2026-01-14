@@ -34,6 +34,27 @@ static void imageSetPixel(image *a, int xpos, int ypos, u32 pixel)
 
     *pixel_location = 255 << 24 | red8 << 16 | green8 << 8 | blue8;
 }
+static void imageSetRect(image *a, int xpos, int ypos, int width, int height, u32 color)
+{
+    int draw_width = MIN(0 - xpos, a->width - xpos);
+    int draw_height = MIN(0 - ypos, a->height - ypos);
+
+    /* handmade hero follow that lol */
+    ypos = MIN(a->height, MAX(ypos, 0));
+    xpos = MIN(a->width, MAX(xpos, 0));
+
+    int dy, dx;
+    for (dy = 0; dy < height; ++dy)
+    {
+        u32 *imgLoc = (u32 *)a->data;
+        imgLoc += ypos * a->width + xpos + dy * a->width;
+        for (dx = 0; dx < width; ++dx)
+        {
+            *imgLoc = color;
+            ++imgLoc;
+        }
+    }
+}
 static void imageFillBlack(image *a)
 {
     u32 *dataCursor = (u32 *)a->data;
