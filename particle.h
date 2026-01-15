@@ -34,7 +34,6 @@ typedef struct
     float green_pos;
     float blue_pos;
     float alpha_pos;
-    u32 pixel_color;
 } ParticleColor;
 typedef struct
 {
@@ -257,18 +256,10 @@ static void particleSystemDraw(ParticleSystem *system, image *buffer, float alph
 
         float particleAlphaX = lerp(system->bodies[p].last_x_pos, system->bodies[p].x_pos, alphaTime);
         float particleAlphaY = lerp(system->bodies[p].last_y_pos, system->bodies[p].y_pos, alphaTime);
-        float red = MAX(0, MIN(255, system->colors[p].red_pos));
-        float green = MAX(0, MIN(255, system->colors[p].green_pos));
-        float blue = MAX(0, MIN(255, system->colors[p].blue_pos));
-        float alpha = MAX(0, MIN(255, system->colors[p].alpha_pos));
-        u8 red8 = (u8)red;
-        u8 green8 = (u8)green;
-        u8 blue8 = (u8)blue;
-        u8 alpha8 = (u8)alpha;
-        system->colors[p].pixel_color = red8 | green8 << 8 | blue8 << 16 | alpha8 << 24;
 
         if (!system->images[p])
-        { imageSetPixel(buffer, particleAlphaX, particleAlphaY, system->colors[p].pixel_color); }
+        { imageSetPixel(buffer, particleAlphaX, particleAlphaY,
+            system->colors[p].red_pos, system->colors[p].green_pos, system->colors[p].blue_pos, system->colors[p].alpha_pos); }
     }
 }
 

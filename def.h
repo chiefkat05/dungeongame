@@ -36,10 +36,14 @@ typedef int64_t i64;
 /* remove */
 #include <math.h>
 
+static int roundFlt(float f)
+{
+    return (int)(f + 0.5f);
+}
+
 /* less "precise" but works better for pixel updates */
 static float lerp(float x, float y, float a)
 {
-    // return (1.0f - a) * x + a * y;
     return x + a * (y - x);
 }
 

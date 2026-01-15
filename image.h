@@ -4,7 +4,7 @@
 #include "def.h"
 
 #define SCREENWIDTH 256
-#define SCREENHEIGHT 256
+#define SCREENHEIGHT 192
 typedef struct
 {
     void *data;
@@ -16,43 +16,48 @@ typedef struct
 
 #define BYTES_PER_PIXEL 4
 
-static void imageSetPixel(image *a, int xpos, int ypos, u32 pixel)
+static void imageSetPixel(image *a, int xpos, int ypos, float red, float green, float blue, float alpha)
 {
-    if (xpos < 0 || ypos < 0 || xpos >= a->width || ypos >= a->height || (pixel >> 24) == 0)
+    if (xpos < 0 || ypos < 0 || xpos >= a->width || ypos >= a->height || alpha < __FLT_EPSILON__)
     { return; }
 
     u32 *pixel_location = (u32 *)(a->data + (ypos * a->row) + xpos * BYTES_PER_PIXEL);
 
     u32 destpixel = *pixel_location;
 
-    u8 alpha = pixel >> 24;
-    u8 invalpha = 255 - alpha;
+    float invalpha = 1.0f - alpha;
+    float dest_redf = (float)(destpixel >> 16 & 255) / 255.0f;
+    float dest_greenf = (float)(destpixel >> 8 & 255) / 255.0f;
+    float dest_bluef = (float)(destpixel & 255) / 255.0f;
+    
+    float redmix = lerp(red, dest_redf, invalpha);
+    float greenmix = lerp(green, dest_greenf, invalpha);
+    float bluemix = lerp(blue, dest_bluef, invalpha);
 
-    u8 red8 = _ilerpd_base((u8)(pixel >> 16 & 255), (u8)(destpixel >> 16 & 255), invalpha, u8);
-    u8 green8 = _ilerpd_base((u8)(pixel >> 8 & 255), (u8)(destpixel >> 8 & 255), invalpha, u8);
-    u8 blue8 = _ilerpd_base((u8)(pixel & 255), (u8)(destpixel & 255), invalpha, u8);
+    u8 red8 = (u8)roundFlt(redmix * 255.0f);
+    u8 green8 = (u8)roundFlt(greenmix * 255.0f);
+    u8 blue8 = (u8)roundFlt(bluemix * 255.0f);
 
-    *pixel_location = 255 << 24 | red8 << 16 | green8 << 8 | blue8;
+    *pixel_location = 255 << 24 | blue8 << 16 | green8 << 8 | red8;
 }
-static void imageSetRect(image *a, int xpos, int ypos, int width, int height, u32 color)
+static void imageSetRect(image *a, int left, int bottom, int right, int top, float red, float green, float blue, float alpha)
 {
-    int draw_width = MIN(0 - xpos, a->width - xpos);
-    int draw_height = MIN(0 - ypos, a->height - ypos);
+    left = MAX(left, 0);
+    bottom = MAX(bottom, 0);
+    right = MIN(right, (int)a->width);
+    top = MIN(top, (int)a->height);
 
-    /* handmade hero follow that lol */
-    ypos = MIN(a->height, MAX(ypos, 0));
-    xpos = MIN(a->width, MAX(xpos, 0));
-
-    int dy, dx;
-    for (dy = 0; dy < height; ++dy)
+    // u32 *pPixel = (u32 *)a->data + bottom * a->width + left;
+    // u32 color = (u8)(alpha * 255.0f) << 24 | (u8)(red * 255.0f) << 16 | (u8)(green * 255.0f) << 8 | (u8)(blue * 255.0f);
+    int x, y;
+    for (y = bottom; y < top; ++y)
     {
-        u32 *imgLoc = (u32 *)a->data;
-        imgLoc += ypos * a->width + xpos + dy * a->width;
-        for (dx = 0; dx < width; ++dx)
+        for (x = left; x < right; ++x)
         {
-            *imgLoc = color;
-            ++imgLoc;
+            // *pPixel++ = color;
+            imageSetPixel(a, x, y, red, green, blue, alpha);
         }
+        // pPixel += a->width - (right - left);
     }
 }
 static void imageFillBlack(image *a)
@@ -395,6 +400,6 @@ static void imageFillVignette(image *src, float strength)
 
 // }
 
-// 
+//
 
 #endif

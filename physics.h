@@ -2,84 +2,125 @@
 #define PHYSICS_H
 
 #include "def.h"
+#include "vector.h"
 
 #define PHYSICS_TICK (1.0f/6000.0f)
 
 typedef struct
 {
-    float x, y, w, h;
+    vec2 pos, size;
+    bool colliding;
 } Rect;
 typedef struct
 {
-    float last_x_pos, last_y_pos;
-    float x_pos, y_pos;
-    float width, height;
-    float x_vel, y_vel;
+    vec2 last_pos, pos, vel;
+    vec2 size;
+    bool colliding;
 } Obj2D;
 
 static Obj2D makeObj(float x, float y, float w, float h)
 {
-    Obj2D obj = {.x_pos = x, .y_pos = y, .width = w, .height = h};
+    Obj2D obj = {.pos = {x, y}, .size = {w, h}};
     return obj;
 }
-static void objPut(Obj2D *obj, float x_pos, float y_pos)
+static void objPut(Obj2D *obj, float x, float y)
 {
-    obj->x_pos = x_pos;
-    obj->y_pos = y_pos;
+    obj->pos = (vec2){x, y};
 }
-static void objMove(Obj2D *obj, float x_vel, float y_vel)
+static void objMove(Obj2D *obj, vec2 move)
 {
-    obj->x_vel = x_vel;
-    obj->y_vel = y_vel;
-}
-static float vectorLength(float x, float y)
-{
-    return sqrt(x * x + y * y);
-}
-static void vectorNormalized(float x, float y, float *out_x, float *out_y)
-{
-    float length = vectorLength(x, y);
-    *out_x = x / length;
-    *out_y = y / length;
+    obj->vel = move;
 }
 static void objMoveTarget(Obj2D *obj, float x_target, float y_target, float speed)
 {
-    float x_dist = x_target - obj->x_pos;
-    float y_dist = y_target - obj->y_pos;
+    vec2 distance = {x_target - obj->pos.x, y_target - obj->pos.y};
+    vec2 direction = normalizeVec2(distance);
 
-    float length = vectorLength(x_dist, y_dist);
-    if (length == 0.0f)
-    { return; }
-
-    float x_dir = x_dist / length;
-    float y_dir = y_dist / length;
-
-    obj->x_vel = speed * x_dir;
-    obj->y_vel = speed * y_dir;
+    obj->vel = multiScalarVec2(direction, speed);
 }
-static void objMoveX(Obj2D *obj, float x_vel)
+static void objMoveX(Obj2D *obj, float x)
 {
-    obj->x_vel = x_vel;
+    obj->vel.x = x;
 }
-static void objMoveY(Obj2D *obj, float y_vel)
+static void objMoveY(Obj2D *obj, float y)
 {
-    obj->y_vel = y_vel;
+    obj->vel.y = y;
 }
 static void objUpdate(Obj2D *obj)
 {
-    obj->last_x_pos = obj->x_pos;
-    obj->last_y_pos = obj->y_pos;
+    obj->last_pos = obj->pos;
+    obj->pos = addVec2(obj->pos, multiScalarVec2(obj->vel, PHYSICS_TICK));
 
-    obj->x_pos += obj->x_vel * PHYSICS_TICK;
-    obj->y_pos += obj->y_vel * PHYSICS_TICK;
+    obj->colliding = false;
 }
-static float objGetX(Obj2D *obj, float alphaTime)
+static vec2 objGetPosition(Obj2D *obj, float alphaTime)
 {
-    return lerp(obj->last_x_pos, obj->x_pos, alphaTime);
+    return lerpVec2(obj->last_pos, obj->pos, alphaTime);
 }
-static float objGetY(Obj2D *obj, float alphaTime)
+
+static void objCollisionResponseRect(Obj2D *obj, Rect *rect)
 {
-    return lerp(obj->last_y_pos, obj->y_pos, alphaTime);
+    if (rect->size.x < __FLT_EPSILON__ || rect->size.y < __FLT_EPSILON__ || obj->size.x < __FLT_EPSILON__ || obj->size.y < __FLT_EPSILON__)
+    { return; }
+
+    Rect boundsA = {
+        .pos.x = obj->pos.x - MIN(0, obj->vel.x * PHYSICS_TICK),
+        .pos.y = obj->pos.y - MIN(0, obj->vel.y * PHYSICS_TICK),
+        .size.x = obj->pos.x + obj->size.x + MAX(0, obj->vel.x * PHYSICS_TICK),
+        .size.y = obj->pos.y + obj->size.y + MAX(0, obj->vel.y * PHYSICS_TICK),
+    };
+
+    if (boundsA.pos.x > rect->pos.x + rect->size.x || boundsA.size.x < rect->pos.x ||
+        boundsA.pos.y > rect->pos.y + rect->size.y || boundsA.size.y < rect->pos.y)
+    { return; }
+
+    Rect expandedRect = (Rect){
+        .pos = rect->pos,
+        .size = addVec2(obj->size,  rect->size)
+    };
+
+    float maxDistance = -__FLT_MAX__, closestEdge = 0.0f;
+    int axis;
+
+    int normalAxis = 0, axisSign = 1;
+    for (axis = 0; axis < 2; ++axis)
+    {
+        if (maxDistance <= expandedRect.pos.arr[axis] - expandedRect.size.arr[axis] / 2.0f - obj->pos.arr[axis])
+        {
+            maxDistance = expandedRect.pos.arr[axis] - expandedRect.size.arr[axis] / 2.0f - obj->pos.arr[axis];
+            closestEdge = expandedRect.pos.arr[axis] - expandedRect.size.arr[axis] / 2.0f;
+            normalAxis = axis;
+            axisSign = -1;
+        }
+        if (maxDistance <= obj->pos.arr[axis] - (expandedRect.pos.arr[axis] + expandedRect.size.arr[axis] / 2.0f))
+        {
+            maxDistance = obj->pos.arr[axis] - (expandedRect.pos.arr[axis] + expandedRect.size.arr[axis] / 2.0f);
+            closestEdge = expandedRect.pos.arr[axis] + expandedRect.size.arr[axis] / 2.0f;
+            normalAxis = axis;
+            axisSign = 1;
+        }
+    }
+
+    if (axisSign < 0 && obj->vel.arr[normalAxis] < 0.0f ||
+        axisSign > 0 && obj->vel.arr[normalAxis] > 0.0f ||
+        ABS(maxDistance) < __FLT_EPSILON__)
+    {
+        return;
+    }
+
+    obj->pos.arr[normalAxis] = closestEdge;
+    obj->vel.arr[normalAxis] = 0.0f;
+
+    obj->colliding = true;
+    rect->colliding = true;
+}
+static void objCollisionResponse(Obj2D *obja, Obj2D *objb)
+{
+    if (obja->pos.x - obja->size.x / 2.0f > objb->pos.x + objb->size.x || obja->pos.x + obja->size.x / 2.0f < objb->pos.x ||
+        obja->pos.y - obja->size.y / 2.0f > objb->pos.y + objb->size.y || obja->pos.y + obja->size.y / 2.0f < objb->pos.y)
+    { return; }
+
+    obja->vel = (vec2){0.0f, 0.0f};
 }
 
 #endif

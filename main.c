@@ -1,52 +1,24 @@
 /**
  * 
- * image manipulation functions (vertical flip, image/screen shake, color multiplication, etc.)
- * ^ specific effect that would be nice: 'glow' effect that goes around the edge of an image and makes a blended outward spread
- * 
- * audio portaudio/openal/something else idk
- * 
- * programmer graphics for demo game
- *      base gui
- *      main menu
- *      character select
- *      player
- *      enemy
- *      level tileset
- * 
- * enemy logic
- * 
- * player movement rules
- * 
- * collision detection
  * 
  * optimization in memory.h
  * optimization in image.h
  * optimization in physics.h
+ *
+ * Making naming convention and other things consistent across the code (write down the rules and keep with them in the future)
+ *          Do this soon so it doesn't become a problem
  * 
  * 
- * NEXT: unified control system
+ * NEXT: collision detection/response
+ * NEXT: write game pseudocode
  * NEXT: game data setup + scene system (and memory management)
  * NEXT: main menu draft art
  * NEXT: main menu code + buttons
- * NEXT: collision detection/response
- * 
- * 
- * 
- * 
- * HEY: This is the *most* important thing here. You want a good-looking game:
- *          You need functioning alpha blending, some nice color and vibrancy post-processing, and image-shake.
- *          You need nice sound, so study vytal. Tracks need a constant backing with reverb, but make the main melody clear.
- *          You need good sound effects, so do sound effect study since you have no knowledge on that.
- * 
- * alpha implementation:
- *      first re-implement it as part of the pixels (so make sure every pixel records it)
- *      then skip pixels with a 0 alpha
- *      then implement a simple blending for every image copy
  * 
  * necessary image manipulations:
  *      special image stretch function that keeps buttons looking crisp
  *      
- *      post-processing: vignette (), bloom, 
+ *      post-processing: vignette (), bloom, ssao?
  * 
  * windows/emscripten build (not until game is basically done)
  * 
@@ -321,24 +293,51 @@ int main()
 
     image screenBuffer = makeImage(&globalMemory, SCREENWIDTH, SCREENHEIGHT);
 
-    image dogImg = imageMakeFromBMP(&globalMemory, "dog.bmp");
+    #define tileWidth 16
+    #define tileHeight 12
+    i8 tilemap[tileHeight][tileWidth] = {
+        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+        // {-1, -1, -1, -1, -1, -1, -1,  1, -1, -1, -1, -1, -1, -1, -1, -1},
+        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+        { 1,  1,  1,  1,  1,  1,  1, -1, -1,  1,  1,  1,  1,  1,  1,  1},
+        { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
+        { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
+        { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
+        { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
+        {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+        {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+        { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
+        { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
+        { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
+        { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
+        { 1,  1,  1,  1,  1,  1,  1, -1, -1,  1,  1,  1,  1,  1,  1,  1},
+    };
 
     image tilemapImg = imageMakeFromBMP(&globalMemory, "atlas.bmp");
-
-    int spx, spy, level_width = 16, level_height = 16;
-    image levelImg = makeImage(&globalMemory, 16 * level_width, 16 * level_height);
-
-    for (spy = 0; spy < level_width; ++spy)
+    image levelImg = makeImage(&globalMemory, tileWidth * SPRITE_EDGE, tileHeight * SPRITE_EDGE);
+    Rect tileCol[tileHeight][tileWidth] = {{0.0f, 0.0f}, {0.0f, 0.0f}};
+    int y, x;
+    for (y = 0; y < tileHeight; ++y)
     {
-        for (spx = 0; spx < level_height; ++spx)
+        for (x = 0; x < tileWidth; ++x)
         {
-            if (spx > 0 && spx < level_width - 1 && spy > 0 && spy < level_height - 1)
-            { continue; }
-            SPRITE_COPY_TO_IMAGE(&tilemapImg, &levelImg, spx * SPRITE_EDGE, spy * SPRITE_EDGE, 2, 1, 1, 1);
+            if (tilemap[tileHeight - y - 1][x] < 0) { continue; }
+
+            SPRITE_COPY_TO_IMAGE(&tilemapImg, &levelImg, x * SPRITE_EDGE - SPRITE_EDGE / 2, y * SPRITE_EDGE - SPRITE_EDGE / 2, tilemap[tileHeight - y - 1][x], 0, 1, 1);
+            tileCol[tileHeight - y - 1][x] = (Rect){{x * SPRITE_EDGE, y * SPRITE_EDGE}, {SPRITE_EDGE, SPRITE_EDGE}};
         }
     }
 
-    Obj2D playerObj = makeObj(0.0f, 0.0f, 16.0f, 16.0f);
+    Obj2D playerObj = makeObj(120.0f, 120.0f, 16.0f, 16.0f);
 
     float deltaTime, currentTime, previousTime, accumulatedTime = 0.0f;
     currentTime = glfwGetTime();
@@ -356,24 +355,59 @@ int main()
         glClearColor(0.2, 0.2, 0.3, 1.0);
         glClear(GL_COLOR_BUFFER_BIT);
         
-        objMoveX(&playerObj, inputGet(&winData.input[0], PAD_AXIS0) / 328);
-        objMoveY(&playerObj, -inputGet(&winData.input[0], PAD_AXIS1) / 328);
+        vec2 playerMovement = {0.0f, 0.0f};
+        
+        /* controller movement broken? */
+        // playerMovement = addVec2(playerMovement, (vec2){inputGet(&winData.input[0], PAD_AXIS0), -inputGet(&winData.input[0], PAD_AXIS1)});
+        if (inputGet(&winData.input[0], KEY_A))
+        { playerMovement = addVec2(playerMovement, (vec2){-1.0f, 0.0f}); }
+        if (inputGet(&winData.input[0], KEY_D))
+        { playerMovement = addVec2(playerMovement, (vec2){1.0f, 0.0f}); }
+        if (inputGet(&winData.input[0], KEY_S))
+        { playerMovement = addVec2(playerMovement, (vec2){0.0f, -1.0f}); }
+        if (inputGet(&winData.input[0], KEY_W))
+        { playerMovement = addVec2(playerMovement, (vec2){0.0f, 1.0f}); }
 
+        playerMovement = multiScalarVec2(normalizeVec2(playerMovement), 100.0f);
+        objMove(&playerObj, playerMovement);
+
+        int tcolx, tcoly;
         while (accumulatedTime > PHYSICS_TICK)
         {
-            objUpdate(&playerObj);
             accumulatedTime -= PHYSICS_TICK;
+
+            for (tcoly = 0; tcoly < tileHeight; ++tcoly)
+            {
+                for (tcolx = 0; tcolx < tileWidth; ++tcolx)
+                {
+                    tileCol[tcoly][tcolx].colliding = false;
+                    objCollisionResponseRect(&playerObj, &tileCol[tcoly][tcolx]);
+                }
+            }
+            objUpdate(&playerObj);
         }
 
         imageFillBlack(&screenBuffer);
-        /**
-         * 
-         * drive to studio apartment place and check it out/ask about pricing and availability
-         * play games to study
-         * 
-         */
+        imageCopyToImage(&levelImg, &screenBuffer, 0, 0, 0, 0, -1, -1);
 
-        imageSetRect(&screenBuffer, objGetX(&playerObj, accumulatedTime), objGetY(&playerObj, accumulatedTime), 40, 40, 255 << 24 | 255);
+        for (tcoly = 0; tcoly < tileHeight; ++tcoly)
+        {
+            for (tcolx = 0; tcolx < tileWidth; ++tcolx)
+            {
+                if (tileCol[tcoly][tcolx].colliding)
+                {
+                    imageSetRect(&screenBuffer, tcolx * SPRITE_EDGE - SPRITE_EDGE / 2,
+                                (tileHeight - tcoly - 1) * SPRITE_EDGE - SPRITE_EDGE / 2,
+                                (tcolx + 1) * SPRITE_EDGE - SPRITE_EDGE / 2,
+                                (tileHeight - tcoly) * SPRITE_EDGE - SPRITE_EDGE / 2, 1.0, 1.0, 1.0, 0.7);
+                }
+            }
+        }
+
+        vec2 pVec = objGetPosition(&playerObj, accumulatedTime);
+        imageSetRect(&screenBuffer, roundFlt(pVec.x) - SPRITE_EDGE / 2, roundFlt(pVec.y) - SPRITE_EDGE / 2,
+        roundFlt(pVec.x) + SPRITE_EDGE - SPRITE_EDGE / 2, roundFlt(pVec.y) + SPRITE_EDGE - SPRITE_EDGE / 2, 0.8, 0.8, 0.5, 1.0);
+        imageSetPixel(&screenBuffer, pVec.x, pVec.y, 1.0, 0.0, 0.0, 1.0);
         imageCopyToScreen(&screenBuffer, texture);
 
         glUseProgram(shader);
