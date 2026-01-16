@@ -72,5 +72,9 @@ static vec2 lerpVec2(vec2 vecA, vec2 vecB, float a)
 {
     return (vec2){lerp(vecA.x, vecB.x, a), lerp(vecA.y, vecB.y, a)};
 }
+static vec2 vec2YX(vec2 vec)
+{
+    return (vec2){vec.y, vec.x};
+}
 
 #endif

@@ -2,6 +2,7 @@
 #define IMAGE_H
 
 #include "def.h"
+#include "vector.h"
 
 #define SCREENWIDTH 256
 #define SCREENHEIGHT 192
@@ -58,6 +59,15 @@ static void imageSetRect(image *a, int left, int bottom, int right, int top, flo
             imageSetPixel(a, x, y, red, green, blue, alpha);
         }
         // pPixel += a->width - (right - left);
+    }
+}
+static void imageClear(image *a)
+{
+    u32 *dataCursor = (u32 *)a->data;
+    int p;
+    for (p = 0; p < a->pixel_count; ++p)
+    {
+        *dataCursor++ = 0;
     }
 }
 static void imageFillBlack(image *a)
@@ -355,37 +365,25 @@ static void imageFlipHorizontal(image *src, image *dst)
         srcData += src->width;
     }
 }
-static void imageFillVignette(image *src, float strength)
+
+/*  2d physiccs obj pool, temporary objects (bullets) test, make your own vignette then go do animatin and dnd */
+/* thanks to https://www.shadertoy.com/view/lsKSWR */
+static void imageVignette(image *src, float strength, float extent)
 {
-    u32 *dataCursor = (u32 *)src->data;
-    int falloffx = 255;
-    int falloffy = 255;
+    u32 *srcData = src->data;
+
     int x, y;
     for (y = 0; y < src->height; ++y)
     {
         for (x = 0; x < src->width; ++x)
         {
-            falloffx = 255 - x / strength;
-            if (x > src->width / 2)
-            {
-                falloffx = 255 - (src->width - x) / strength;
-            }
-            falloffy = 255 - y / strength;
-            if (y > src->height / 2)
-            {
-                falloffy = 255 - (src->height - y) / strength;
-            }
+            vec2 uv = divVec2((vec2){x, y}, (vec2){src->width, src->height});
+            uv = multiVec2(uv, subVec2((vec2){1.0f, 1.0f}, vec2YX(uv)));
+            float vig = uv.x * uv.y * strength;
 
-            falloffx = MIN(falloffx, 255);
-            falloffy = MIN(falloffy, 255);
-            falloffx = MAX(falloffx, 0);
-            falloffy = MAX(falloffy, 0);
+            vig = pow(vig, extent);
 
-            int falloff = falloffx + falloffy;
-            falloff = MIN(falloff, 255);
-            falloff = MAX(falloff, 0);
-
-            *dataCursor++ = (u8)falloff << 24;
+            imageSetPixel(src, x, y, 0, 0, 0, 1.0f - vig);
         }
     }
 }

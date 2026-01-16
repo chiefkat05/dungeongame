@@ -3,7 +3,7 @@
  * 
  * optimization in memory.h
  * optimization in image.h
- * optimization in physics.h
+ * optimization in obj2d.h
  *
  * Making naming convention and other things consistent across the code (write down the rules and keep with them in the future)
  *          Do this soon so it doesn't become a problem
@@ -31,7 +31,7 @@
 #include "def.h"
 #include "image.h"
 #include "particle.h"
-#include "physics.h"
+#include "obj2d.h"
 
 #define PRESSED 1
 #define RELEASED 0
@@ -258,6 +258,36 @@ static void mouseButtonCallback(GLFWwindow *window, int button, int action, int 
     inputSet(&data->input[0], MOUSE_BUTTON_LEFT + button, action == GLFW_PRESS ? PRESSED : RELEASED);
 }
 
+#define TILEMAP_WIDTH 16
+#define TILEMAP_HEIGHT 12
+typedef struct
+{
+    i8 tilemap[TILEMAP_HEIGHT][TILEMAP_WIDTH];
+    Rect tileCol[TILEMAP_HEIGHT][TILEMAP_WIDTH];
+} TileMap;
+typedef struct
+{
+    TileMap *maps;
+    u32 currentMap;
+} WorldMap;
+
+static void tileMapInit(TileMap *map, image *tilemapImage, image *outImage)
+{
+    imageClear(outImage);
+    int y, x;
+    for (y = 0; y < TILEMAP_HEIGHT; ++y)
+    {
+        for (x = 0; x < TILEMAP_WIDTH; ++x)
+        {
+            if (map->tilemap[TILEMAP_HEIGHT - y - 1][x] < 0) { continue; }
+
+            SPRITE_COPY_TO_IMAGE(tilemapImage, outImage, x * SPRITE_EDGE, y * SPRITE_EDGE, map->tilemap[TILEMAP_HEIGHT - y - 1][x], 1, 1, 1);
+            map->tileCol[TILEMAP_HEIGHT - y - 1][x] = (Rect){{x * SPRITE_EDGE + SPRITE_EDGE / 2.0f, y * SPRITE_EDGE + SPRITE_EDGE / 2.0f},
+                        {SPRITE_EDGE, SPRITE_EDGE}};
+        }
+    }
+}
+
 int main()
 {
     glfwInit();
@@ -293,57 +323,59 @@ int main()
 
     image screenBuffer = makeImage(&globalMemory, SCREENWIDTH, SCREENHEIGHT);
 
-    #define tileWidth 16
-    #define tileHeight 12
-    i8 tilemap[tileHeight][tileWidth] = {
-        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        // {-1, -1, -1, -1, -1, -1, -1,  1, -1, -1, -1, -1, -1, -1, -1, -1},
-        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        // {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        { 1,  1,  1,  1,  1,  1,  1, -1, -1,  1,  1,  1,  1,  1,  1,  1},
+    TileMap screenA = {.tilemap =
+        {
+        { 1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1},
         { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
         { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
         { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
         { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
-        {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
         { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
         { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
         { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
         { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
-        { 1,  1,  1,  1,  1,  1,  1, -1, -1,  1,  1,  1,  1,  1,  1,  1},
-    };
+        { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
+        { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
+        { 1,  1,  1,  1,  1,  1,  1, -1, -1,  1,  1,  1,  1,  1,  1,  1}}};
+    TileMap screenB = {.tilemap =
+        {{ 1,  1,  1,  1,  1,  1,  1, -1, -1,  1,  1,  1,  1,  1,  1,  1},
+        { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
+        { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
+        { 1, -1, -1, -1, -1, -1,  2, -1, -1,  2, -1, -1, -1, -1, -1,  1},
+        { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
+        { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
+        { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
+        { 1, -1, -1, -1, -1, -1,  2,  2,  2,  2, -1, -1, -1, -1, -1,  1},
+        { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
+        { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
+        { 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1},
+        { 1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1}}};
+
 
     image tilemapImg = imageMakeFromBMP(&globalMemory, "atlas.bmp");
-    image levelImg = makeImage(&globalMemory, tileWidth * SPRITE_EDGE, tileHeight * SPRITE_EDGE);
-    Rect tileCol[tileHeight][tileWidth] = {{0.0f, 0.0f}, {0.0f, 0.0f}};
-    int y, x;
-    for (y = 0; y < tileHeight; ++y)
-    {
-        for (x = 0; x < tileWidth; ++x)
-        {
-            if (tilemap[tileHeight - y - 1][x] < 0) { continue; }
+    image levelImg = makeImage(&globalMemory, TILEMAP_WIDTH * SPRITE_EDGE, TILEMAP_HEIGHT * SPRITE_EDGE);
 
-            SPRITE_COPY_TO_IMAGE(&tilemapImg, &levelImg, x * SPRITE_EDGE - SPRITE_EDGE / 2, y * SPRITE_EDGE - SPRITE_EDGE / 2, tilemap[tileHeight - y - 1][x], 0, 1, 1);
-            tileCol[tileHeight - y - 1][x] = (Rect){{x * SPRITE_EDGE, y * SPRITE_EDGE}, {SPRITE_EDGE, SPRITE_EDGE}};
-        }
-    }
+    WorldMap world = {};
+    world.maps = memGrab(&globalMemory, MEGABYTES(2));
+    world.maps[0] = screenA;
+    world.maps[1] = screenB;
 
-    Obj2D playerObj = makeObj(120.0f, 120.0f, 16.0f, 16.0f);
+    tileMapInit(&world.maps[world.currentMap], &tilemapImg, &levelImg);
+
+    Obj2DPool objects = {};
+    Obj2DPool bullets = {};
+
+    const float plSpawn = 120.0f;
+    Obj2D *playerObj = obj2DPoolAlloc(&objects);
+    *playerObj = obj2D(plSpawn, plSpawn, 16.0f, 16.0f);
 
     float deltaTime, currentTime, previousTime, accumulatedTime = 0.0f;
     currentTime = glfwGetTime();
 
     while (!glfwWindowShouldClose(window))
     {
+        inputUpdate(&winData.input[0]);
+
         glfwPollEvents();
         joystickPoll(&winData, 0);
 
@@ -368,46 +400,63 @@ int main()
         if (inputGet(&winData.input[0], KEY_W))
         { playerMovement = addVec2(playerMovement, (vec2){0.0f, 1.0f}); }
 
+        if (inputJustPressed(&winData.input[0], KEY_SPACE))
+        {
+            Obj2D *playerBullet = obj2DPoolAlloc(&bullets);
+            *playerBullet = obj2D(playerObj->pos.x, playerObj->pos.y, 8, 8);
+            obj2DMove(playerBullet, (vec2){200.0f, 0.0f});
+            obj2DSetImage(playerBullet, &tilemapImg);
+        }
+        obj2DPoolResetUpdate(&bullets);
+        obj2DPoolResetUpdate(&objects);
+
         playerMovement = multiScalarVec2(normalizeVec2(playerMovement), 100.0f);
-        objMove(&playerObj, playerMovement);
+        obj2DMove(playerObj, playerMovement);
 
         int tcolx, tcoly;
         while (accumulatedTime > PHYSICS_TICK)
         {
-            accumulatedTime -= PHYSICS_TICK;
-
-            for (tcoly = 0; tcoly < tileHeight; ++tcoly)
+            for (tcoly = 0; tcoly < TILEMAP_HEIGHT; ++tcoly)
             {
-                for (tcolx = 0; tcolx < tileWidth; ++tcolx)
+                for (tcolx = 0; tcolx < TILEMAP_WIDTH; ++tcolx)
                 {
-                    tileCol[tcoly][tcolx].colliding = false;
-                    objCollisionResponseRect(&playerObj, &tileCol[tcoly][tcolx]);
+                    world.maps[world.currentMap].tileCol[tcoly][tcolx].colliding = false;
+                    obj2DCollisionResponseRect(playerObj, &world.maps[world.currentMap].tileCol[tcoly][tcolx]);
                 }
             }
-            objUpdate(&playerObj);
+            obj2DPoolUpdate(&objects);
+            obj2DPoolUpdate(&bullets);
+
+            obj2DPoolRule(&bullets, obj2DRule_OutOfScreenDeath);
+
+            if (playerObj->pos.y < 0)
+            {
+                world.currentMap = 1;
+                tileMapInit(&world.maps[world.currentMap], &tilemapImg, &levelImg);
+                obj2DPut(playerObj, playerObj->pos.x, SCREENHEIGHT);
+            }
+            if (playerObj->pos.y > SCREENHEIGHT)
+            {
+                world.currentMap = 0;
+                tileMapInit(&world.maps[world.currentMap], &tilemapImg, &levelImg);
+                obj2DPut(playerObj, playerObj->pos.x, 0);
+            }
+
+            accumulatedTime -= PHYSICS_TICK;
         }
 
         imageFillBlack(&screenBuffer);
         imageCopyToImage(&levelImg, &screenBuffer, 0, 0, 0, 0, -1, -1);
 
-        for (tcoly = 0; tcoly < tileHeight; ++tcoly)
-        {
-            for (tcolx = 0; tcolx < tileWidth; ++tcolx)
-            {
-                if (tileCol[tcoly][tcolx].colliding)
-                {
-                    imageSetRect(&screenBuffer, tcolx * SPRITE_EDGE - SPRITE_EDGE / 2,
-                                (tileHeight - tcoly - 1) * SPRITE_EDGE - SPRITE_EDGE / 2,
-                                (tcolx + 1) * SPRITE_EDGE - SPRITE_EDGE / 2,
-                                (tileHeight - tcoly) * SPRITE_EDGE - SPRITE_EDGE / 2, 1.0, 1.0, 1.0, 0.7);
-                }
-            }
-        }
-
-        vec2 pVec = objGetPosition(&playerObj, accumulatedTime);
-        imageSetRect(&screenBuffer, roundFlt(pVec.x) - SPRITE_EDGE / 2, roundFlt(pVec.y) - SPRITE_EDGE / 2,
-        roundFlt(pVec.x) + SPRITE_EDGE - SPRITE_EDGE / 2, roundFlt(pVec.y) + SPRITE_EDGE - SPRITE_EDGE / 2, 0.8, 0.8, 0.5, 1.0);
+        vec2 pVec = obj2DGetPosition(playerObj, accumulatedTime);
+        imageSetRect(&screenBuffer, roundFlt(pVec.x) - SPRITE_EDGE / 2.0f, roundFlt(pVec.y) - SPRITE_EDGE / 2.0f,
+        roundFlt(pVec.x) + SPRITE_EDGE / 2.0f, roundFlt(pVec.y) + SPRITE_EDGE / 2.0f, 0.8, 0.8, 0.5, 1.0);
         imageSetPixel(&screenBuffer, pVec.x, pVec.y, 1.0, 0.0, 0.0, 1.0);
+
+        obj2DPoolDraw(&bullets, &screenBuffer, accumulatedTime);
+        obj2DPoolDraw(&objects, &screenBuffer, accumulatedTime);
+
+        imageVignette(&screenBuffer, 15.0f, 0.25f);
         imageCopyToScreen(&screenBuffer, texture);
 
         glUseProgram(shader);

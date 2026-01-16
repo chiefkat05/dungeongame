@@ -3,7 +3,7 @@
 
 #include "def.h"
 #include "image.h"
-#include "physics.h"
+#include "obj2d.h"
 
 typedef enum
 {

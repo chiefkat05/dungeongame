@@ -93,8 +93,8 @@ static void copyPixel(u32 *dest, u32 *src, u64 count)
     {
         if (((((u32 *)src)[i] >> 24) & 255) == 0)
         { continue; }
-        // if (((((u32 *)src)[i] >> 24) & 255) == 255)
-        // { ((u8 *)dest)[i] = ((u8 *)src)[i]; }
+        if (((((u32 *)src)[i] >> 24) & 255) == 255)
+        { ((u8 *)dest)[i] = ((u8 *)src)[i]; }
 
         u32 destpixel = ((u32 *)dest)[i];
         u32 pixel = ((u32 *)src)[i];
