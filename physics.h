@@ -60,6 +60,10 @@ static vec2 objGetPosition(Obj2D *obj, float alphaTime)
 
 static void objCollisionResponseRect(Obj2D *obj, Rect *rect)
 {
+    /* still an issue where, when moving along a line of colliders aligned on the same axis, you will get 'stuck' on boxes occasionally.
+        The reason this happens is because the box reads the obj's velocity/position on the next frame, which is likely to be
+        inside the box coming from a strange angle.
+    */
     if (rect->size.x < __FLT_EPSILON__ || rect->size.y < __FLT_EPSILON__ || obj->size.x < __FLT_EPSILON__ || obj->size.y < __FLT_EPSILON__)
     { return; }
 
